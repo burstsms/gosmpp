@@ -1,6 +1,8 @@
 package data
 
 import (
+	"unicode/utf16"
+
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
@@ -208,29 +210,32 @@ func (*ucs2) ShouldSplit(text string, octetLimit uint) (shouldSplit bool) {
 	return uint(len(text)*2) > octetLimit
 }
 
-func (c *ucs2) EncodeSplit(text string, octetLimit uint) (allSeg [][]byte, err error) {
+func (c *ucs2) EncodeSplit(text string, octetLimit uint) (allSegs [][]byte, err error) {
 	if octetLimit < 64 {
 		octetLimit = 134
 	}
 
-	allSeg = [][]byte{}
-	runeSlice := []rune(text)
-	hextetLim := int(octetLimit / 2) // round down
+	codeUnits := utf16.Encode([]rune(text))
 
-	// hextet = 16 bits, the correct terms should be hexadectet
-	fr, to := 0, hextetLim
-	for fr < len(runeSlice) {
-		if to > len(runeSlice) {
-			to = len(runeSlice)
+	// Split the code units into chunks
+	chunkMax := int(octetLimit) / 2
+	chunks := [][]uint16{}
+	for len(codeUnits) > 0 {
+		chunkSize := len(codeUnits)
+		if chunkSize > chunkMax {
+			chunkSize = chunkMax
 		}
 
-		seg, err := c.Encode(string(runeSlice[fr:to]))
-		if err != nil {
-			return nil, err
-		}
-		allSeg = append(allSeg, seg)
+		chunks = append(chunks, codeUnits[:chunkSize])
+		codeUnits = codeUnits[chunkSize:]
+	}
 
-		fr, to = to, to+hextetLim
+	allSegs = [][]byte{}
+
+	// Encode each chunk as UCS-2 (16-bit) bytes
+	for _, chunk := range chunks {
+		enc, _ := c.Encode(string(utf16.Decode(chunk)))
+		allSegs = append(allSegs, enc)
 	}
 
 	return
