@@ -107,6 +107,17 @@ func (t *receivable) loop() {
 
 func (t *receivable) handleOrClose(p pdu.PDU) (closing bool) {
 	if p != nil {
+		if t.settings.OnAllPDU != nil {
+			r, closeBind := t.settings.OnAllPDU(p)
+			t.settings.response(r)
+			if closeBind {
+				time.Sleep(50 * time.Millisecond)
+				closing = true
+				t.closing(UnbindClosing)
+			}
+			return
+		}
+
 		switch pp := p.(type) {
 		case *pdu.EnquireLink:
 			if t.settings.response != nil {
